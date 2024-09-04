@@ -11,6 +11,7 @@ using Dapper.Oracle;
 using System.Net;
 using System.Reflection;
 using System.Data;
+using System.Diagnostics;
 
 
 namespace CassandraScheduledTask.DAL
@@ -20,7 +21,7 @@ namespace CassandraScheduledTask.DAL
         IEnumerable<SZO_VER_PRODUCT_COMBO> Get_AllCombination(int locationId);
         IEnumerable<OPENED_INBOUND_ORDERS> Get_VeriFone_OpenedInboundOrders(int locationId);
         int Insert_SZO_VER_PRODUCT_COMBO(dynamic record, string model1, string model2);
-        IEnumerable<dynamic> GET_CONFIG_BY_TYPE_ID(int p_typeid, string p_workcenter);
+        IEnumerable<VF_CONFIGURATION> GET_CONFIG_BY_TYPE_ID(int p_typeid, string p_workcenter);
 
     }
 
@@ -97,20 +98,36 @@ namespace CassandraScheduledTask.DAL
             return rowsAffected;
         }
 
-        public IEnumerable<dynamic> GET_CONFIG_BY_TYPE_ID(int p_typeid, string p_workcenter)
+        public IEnumerable<VF_CONFIGURATION> GET_CONFIG_BY_TYPE_ID(int p_typeid, string p_workcenter)
         {
-            const string sql = "WEBUI.VERIFONE_CONFIG.GET_CONFIG_BY_TYPE_ID";
+            using var connection = GetConnection();
+            string query3 = @"SELECT
+                                VFC.WORKCENTER ,
+                                VFC.CRITERIA ,
+                                VFC.EXCEPTIONVALUES ,
+                                VFC.INCLUDEDVALUES ,
+                                VFC.CONFIG_NAME
+                                FROM
+                                WEBUI.VF_CONFIGURATION VFC
+                                    WHERE
+                                        VFC.INACTIVE_IND = 0 AND
+                                        VFC.CONFIG_TYPE_ID = 9 AND
+                                    (VFC.WORKCENTER = 'ALL')";
+            var vf_config = connection.Query<VF_CONFIGURATION>(query3);
+
+            /*const string sql = "WEBUI.VERIFONE_CONFIG.GET_CONFIG_BY_TYPE_ID";
             var dynamicParameters = new OracleDynamicParameters();
             dynamicParameters.Add(":P_TYPEID", p_typeid, OracleMappingType.Int16, ParameterDirection.Input);
             dynamicParameters.Add(":P_WORKCENTER", p_workcenter, OracleMappingType.Varchar2, ParameterDirection.Input);
             dynamicParameters.Add(":O_CURSOR", string.Empty, OracleMappingType.RefCursor, ParameterDirection.Output);
 
-            using var connection = GetConnection();
-            return connection.Query(sql,
+                var vf_configuration = connection.Query<VF_CONFIGURATION>(sql,
                 dynamicParameters,
                 null,
                 false, null,
-                CommandType.StoredProcedure);
+                CommandType.StoredProcedure);*/
+                return vf_config;
+            
         }
     }
     public record SZO_VER_PRODUCT_COMBO(Decimal VER_PC_ID, Int64 LOCATION_ID, String PART_NO, String MODEL_NO,

@@ -49,7 +49,6 @@ namespace CassandraScheduledTask
                 VerifoneCommonAPI vc = new VerifoneCommonAPI(configuration);
                 SendEmail se = new SendEmail();
 
-                var recordsConfigByTypeID = or.GET_CONFIG_BY_TYPE_ID(9, "ALL");
                 var Get_AllCombination = or.Get_AllCombination(1224);
                 var Get_VeriFone_OpenedInboundOrders = or.Get_VeriFone_OpenedInboundOrders(1224);
                 var DistinctOpenedInboundOrders =
@@ -66,7 +65,9 @@ namespace CassandraScheduledTask
                                         REQUEST_TYPE = i.REQUEST_TYPE
                                     }).Distinct().ToList();
 
-               
+
+
+                var recordsConfigByTypeID = or.GET_CONFIG_BY_TYPE_ID(9, "ALL");
 
                 //Check Alerts
                 foreach (var order in DistinctOpenedInboundOrders)
@@ -120,7 +121,7 @@ namespace CassandraScheduledTask
                             se.SendEmailAlert(strHost, strFrom, strToAll, strCcAll, strBccAll, strSubject, strMessage, "");
                         }
                     }
-                }
+                
                     var SelectedOpenedInboundOrders = DistinctOpenedInboundOrders
                                                         .Where(i => i.REPAIR_TYPE.Contains("SPEC") ||
                                                                     i.REPAIR_TYPE.Contains("LOAD") ||
@@ -132,20 +133,20 @@ namespace CassandraScheduledTask
                     {
                         foreach (var record2 in Get_AllCombination)
                         {
-                            /*if (!item.APP_ID.Equals(item2.APP_ID) || 
-                                !item.SHIP_TO_SITE_ID.Equals(item2.SHIP_TO_SITE_ID) || 
-                                !item.PART_NO.Equals(item2.PART_NO) ||
-                                !item.MODEL_NO.Equals(item2.MODEL_NO) ||
-                                !item.ADDRESS.Equals(item2.ADDRESS) ||
-                                !item.CUSTOMER.Equals(item2.CUSTOMER) ||
-                                !item.SHIP_TO_COUNTRY.Equals(item2.SHIP_TO_COUNTRY) ||
-                                !item.REPAIR_TYPE.Equals(item2.REPAIR_TYPE) ||
-                                !item.REQUEST_TYPE.Equals(item2.REQUEST_TYPE))
-                            {*/
-                            //Call API
-
-                            productInfo[] productInfos = new productInfo[]
+                            if (!(record1.APP_ID == (record2.APP_ID)) ||
+                                !(record1.SHIP_TO_SITE_ID == (record2.SHIP_TO_SITE_ID)) ||
+                                !(record1.PART_NO == (record2.PART_NO)) ||
+                                !(record1.MODEL_NO == (record2.MODEL_NO)) ||
+                                !(record1.ADDRESS == (record2.ADDRESS)) ||
+                                !(record1.CUSTOMER == (record2.CUSTOMER)) ||
+                                !(record1.SHIP_TO_COUNTRY == (record2.SHIP_TO_COUNTRY)) ||
+                                !(record1.REPAIR_TYPE == (record2.REPAIR_TYPE)) ||
+                                !(record1.REQUEST_TYPE == (record2.REQUEST_TYPE)))
                             {
+                                //Call API
+
+                                productInfo[] productInfos = new productInfo[]
+                                {
                             new productInfo
                             {
                                 RequestType = record1.REQUEST_TYPE ?? "N/A",
@@ -160,50 +161,52 @@ namespace CassandraScheduledTask
                                 Model = record1.MODEL_NO ?? "N/A",
 
                             }
-                            };
+                                };
 
-                            getKeyMethodType getKeyType = new getKeyMethodType();
-                            getKeyType.productInfo = productInfos;
-                            getKeyType.returnType = "key";
+                                getKeyMethodType getKeyType = new getKeyMethodType();
+                                getKeyType.productInfo = productInfos;
+                                getKeyType.returnType = "key";
 
-                            getKeyMethodType getMethodType = new getKeyMethodType();
-                            getMethodType.productInfo = productInfos;
-                            getMethodType.returnType = "method";
+                                getKeyMethodType getMethodType = new getKeyMethodType();
+                                getMethodType.productInfo = productInfos;
+                                getMethodType.returnType = "method";
 
-                            string jsonKeyType = Newtonsoft.Json.JsonConvert.SerializeObject(getKeyType);
-                            string jsonMethodType = Newtonsoft.Json.JsonConvert.SerializeObject(getMethodType);
+                                string jsonKeyType = Newtonsoft.Json.JsonConvert.SerializeObject(getKeyType);
+                                string jsonMethodType = Newtonsoft.Json.JsonConvert.SerializeObject(getMethodType);
 
-                            var httpContentKeyType = new StringContent(jsonKeyType, Encoding.UTF8, "application/json");
-                            var httpContentMethodType = new StringContent(jsonMethodType, Encoding.UTF8, "application/json");
+                                var httpContentKeyType = new StringContent(jsonKeyType, Encoding.UTF8, "application/json");
+                                var httpContentMethodType = new StringContent(jsonMethodType, Encoding.UTF8, "application/json");
 
 
-                            string suggestedKey = vc.PostAsync("/verifone-common/criteria/getKeyMethodType", httpContentKeyType);
-                            string suggestedMethod = vc.PostAsync("/verifone-common/criteria/getKeyMethodType", httpContentMethodType);
+                                string suggestedKey = vc.PostAsync("/verifone-common/criteria/getKeyMethodType", httpContentKeyType);
+                                string suggestedMethod = vc.PostAsync("/verifone-common/criteria/getKeyMethodType", httpContentMethodType);
 
-                            RESPONSE model1 = JsonConvert.DeserializeObject<RESPONSE>(suggestedKey);
-                            RESPONSE model2 = JsonConvert.DeserializeObject<RESPONSE>(suggestedMethod);
+                                RESPONSE model1 = JsonConvert.DeserializeObject<RESPONSE>(suggestedKey);
+                                RESPONSE model2 = JsonConvert.DeserializeObject<RESPONSE>(suggestedMethod);
 
-                            var rowsAffected = or.Insert_SZO_VER_PRODUCT_COMBO(record2, model1.data, model1.data);
-                            Console.WriteLine($"{rowsAffected} row(s) inserted.");
+                                var rowsAffected = or.Insert_SZO_VER_PRODUCT_COMBO(record2, model1.data, model1.data);
+                                Console.WriteLine($"{rowsAffected} row(s) inserted.");
 
-                        //send mail alerts
-                        string strHost = "smtp.corp.ivytech.net";//ConfigurationManager.AppSettings["MailHost"];
-                        string strFrom = "donotreply@ivytech.com"; //ConfigurationManager.AppSettings["MailFrom"];
-                        string strToAll = "shobhna.parasher2@ivytech.com";  //ConfigurationManager.AppSettings["MailToAll"];
-                        string strCcAll = ""; // ConfigurationManager.AppSettings["MailCcAll"];
-                        string strBccAll = "";  //ConfigurationManager.AppSettings["MailBccAll"];
-                        string strSubject = string.Format("{0} {1} {2}", DateTime.Now, " - ", "Cassandra Notification"); //ConfigurationManager.AppSettings["MailSubject"]);
-                        string strMessage = string.Format("{0} {1}", "Cassandra Notification - No of rows inserted :", rowsAffected);
-                        string mailResponse = se.SendEmailAlert(strHost, strFrom, strToAll, strCcAll, strBccAll, strSubject, strMessage, "");
-                        /*
-                        if (ex.Message == "Unable to connect to the remote server")
-                            Program.Terminate(13);
-                        else
-                            Program.Terminate(1099);*/
+                                //send mail alerts
+                                string strHost = "smtp.corp.ivytech.net";//ConfigurationManager.AppSettings["MailHost"];
+                                string strFrom = "donotreply@ivytech.com"; //ConfigurationManager.AppSettings["MailFrom"];
+                                string strToAll = "shobhna.parasher2@ivytech.com";  //ConfigurationManager.AppSettings["MailToAll"];
+                                string strCcAll = ""; // ConfigurationManager.AppSettings["MailCcAll"];
+                                string strBccAll = "";  //ConfigurationManager.AppSettings["MailBccAll"];
+                                string strSubject = string.Format("{0} {1} {2}", DateTime.Now, " - ", "Cassandra Notification"); //ConfigurationManager.AppSettings["MailSubject"]);
+                                string strMessage = string.Format("{0} {1}", "Cassandra Notification - No of rows inserted :", rowsAffected);
+                                string mailResponse = se.SendEmailAlert(strHost, strFrom, strToAll, strCcAll, strBccAll, strSubject, strMessage, "");
+                                /*
+                                if (ex.Message == "Unable to connect to the remote server")
+                                    Program.Terminate(13);
+                                else
+                                    Program.Terminate(1099);*/
 
-                        se.SendEmailAlert(strHost, strFrom, strToAll, strCcAll, strBccAll, strSubject, strMessage, "");
-                    }
-                    }
+                                se.SendEmailAlert(strHost, strFrom, strToAll, strCcAll, strBccAll, strSubject, strMessage, "");
+                            }
+                            }
+                        }
+                }
                 
             }
 
