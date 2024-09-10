@@ -19,6 +19,7 @@ using Newtonsoft.Json;
 using Microsoft.CodeAnalysis;
 using System.Runtime.ConstrainedExecution;
 using CassandraScheduledTask.Services;
+using Microsoft.Extensions.Logging;
 namespace CassandraScheduledTask
 {
     public static class Program
@@ -34,10 +35,16 @@ namespace CassandraScheduledTask
         {
         }
         static void Main(string[] args)
-        {
-            Console.WriteLine("-= Start running scheduled job(s)... =-");
+        {            
             try
             {
+                using var loggerFactory = LoggerFactory.Create(builder =>
+                {
+                    builder.AddConsole();
+                });
+                ILogger logger = loggerFactory.CreateLogger("Program");
+                logger.LogInformation("-= Start running scheduled job(s)... =-");
+
                 string path = Environment.CurrentDirectory;
                 path = path.Replace("bin\\Debug\\net8.0", string.Empty);
 
@@ -49,8 +56,15 @@ namespace CassandraScheduledTask
                 VerifoneCommonAPI vc = new VerifoneCommonAPI(configuration);
                 SendEmail se = new SendEmail();
 
+                logger.LogInformation("Getting data from Get_AllCombination...");
                 var Get_AllCombination = or.Get_AllCombination(1224);
+                logger.LogInformation("Total no. of records in Get_AllCombination - " + Get_AllCombination.Count());
+
+                logger.LogInformation("Getting data from Get_VeriFone_OpenedInboundOrders...");
                 var Get_VeriFone_OpenedInboundOrders = or.Get_VeriFone_OpenedInboundOrders(1224);
+                logger.LogInformation("Total no. of records in Get_VeriFone_OpenedInboundOrders - " + Get_VeriFone_OpenedInboundOrders.Count());
+                
+                //Getting distinct records
                 var DistinctOpenedInboundOrders =
                                     Get_VeriFone_OpenedInboundOrders.Select(i => new
                                     {
@@ -61,21 +75,23 @@ namespace CassandraScheduledTask
                                         ADDRESS = i.ADDRESS,
                                         CUSTOMER = i.CUSTOMER,
                                         SHIP_TO_COUNTRY = i.SHIP_TO_COUNTRY,
-                                        REPAIR_TYPE = i.REPAIR_TYPE,
+                                        REPAIR_TYPE = string.IsNullOrEmpty(i.REPAIR_TYPE) ? "NA" : i.REPAIR_TYPE,
                                         REQUEST_TYPE = i.REQUEST_TYPE
                                     }).Distinct().ToList();
 
 
-
-                var recordsConfigByTypeID = or.GET_CONFIG_BY_TYPE_ID(9, "ALL");
-
                 //Check Alerts
+                var recordsConfigByTypeID = or.GET_CONFIG_BY_TYPE_ID(9, "ALL");
+                                
                 foreach (var order in DistinctOpenedInboundOrders)
-                { 
-                    
+                {
                     foreach (var record in recordsConfigByTypeID)
                     {
-                        productInfo[] productInfos1 = new productInfo[]
+                        //execute filterByCriteria
+                        logger.LogInformation("Calling filterByCriteria");
+                        List<criteriaTable> criteriaTables = JsonConvert.DeserializeObject<List<criteriaTable>>(record.CRITERIA);
+
+                        productInfo[] productInfo = new productInfo[]
                         {
                             new productInfo
                             {
@@ -92,48 +108,47 @@ namespace CassandraScheduledTask
 
                             }
                         };
-
                         filterByCriteria filterByCriteria = new filterByCriteria();
-                        filterByCriteria.productInfo = productInfos1;
+                        filterByCriteria.productInfo = productInfo;
+                        filterByCriteria.criteriaTable = criteriaTables.ToArray();
 
-                        string jsonCriteria = Newtonsoft.Json.JsonConvert.SerializeObject(filterByCriteria);
-                        var httpContentCriteria = new StringContent(jsonCriteria, Encoding.UTF8, "application/json");
+                        var httpContentCriteria = new StringContent(JsonConvert.SerializeObject(filterByCriteria),
+                                                                    Encoding.UTF8, "application/json");
 
                         string Criteria = vc.PostAsync("verifone-common/criteria/filterByCriteria", httpContentCriteria);
-                        RESPONSE model = JsonConvert.DeserializeObject<RESPONSE>(Criteria);
-                        if (model.status == "PASS")
+                        RESPONSE responseCriteria = JsonConvert.DeserializeObject<RESPONSE>(Criteria);
+                        if (responseCriteria.status == "false")
                         {
                             //send mail alerts
+                            logger.LogInformation("Sending mail alert...");
                             string strHost = "smtp.corp.ivytech.net";//ConfigurationManager.AppSettings["MailHost"];
                             string strFrom = "donotreply@ivytech.com"; //ConfigurationManager.AppSettings["MailFrom"];
                             string strToAll = "shobhna.parasher2@ivytech.com";  //ConfigurationManager.AppSettings["MailToAll"];
                             string strCcAll = ""; // ConfigurationManager.AppSettings["MailCcAll"];
                             string strBccAll = "";  //ConfigurationManager.AppSettings["MailBccAll"];
                             string strSubject = string.Format("{0} {1} {2}", DateTime.Now, " - ", "Cassandra Notification"); //ConfigurationManager.AppSettings["MailSubject"]);
-                            string strMessage = string.Format("{0} {1}", "Cassandra Notification - IncludedValue Field", record.INCLUDEDVALUES);
+                            string strMessage = string.Format("{0} {1}", "Cassandra Notification - IncludedValue Field : ", record.INCLUDEDVALUES);
                             string mailResponse = se.SendEmailAlert(strHost, strFrom, strToAll, strCcAll, strBccAll, strSubject, strMessage, "");
-                            /*
-                            if (ex.Message == "Unable to connect to the remote server")
-                                Program.Terminate(13);
-                            else
-                                Program.Terminate(1099);*/
-
+                            
                             se.SendEmailAlert(strHost, strFrom, strToAll, strCcAll, strBccAll, strSubject, strMessage, "");
+                            logger.LogInformation("Mail successfully sent");
                         }
                     }
-                
-                    var SelectedOpenedInboundOrders = DistinctOpenedInboundOrders
+                }
+
+                //Getting selected records based on Repair Type
+                var SelectedOpenedInboundOrders = DistinctOpenedInboundOrders
                                                         .Where(i => i.REPAIR_TYPE.Contains("SPEC") ||
                                                                     i.REPAIR_TYPE.Contains("LOAD") ||
                                                                     i.REPAIR_TYPE.Contains("SOFT"))
                                                         .ToList();
 
-
-                    foreach (var record1 in SelectedOpenedInboundOrders)
+                //Compare records
+                foreach (var record1 in SelectedOpenedInboundOrders)
+                {
+                    foreach (var record2 in Get_AllCombination)
                     {
-                        foreach (var record2 in Get_AllCombination)
-                        {
-                            if (!(record1.APP_ID == (record2.APP_ID)) ||
+                        if (!(record1.APP_ID == (record2.APP_ID)) ||
                                 !(record1.SHIP_TO_SITE_ID == (record2.SHIP_TO_SITE_ID)) ||
                                 !(record1.PART_NO == (record2.PART_NO)) ||
                                 !(record1.MODEL_NO == (record2.MODEL_NO)) ||
@@ -142,82 +157,80 @@ namespace CassandraScheduledTask
                                 !(record1.SHIP_TO_COUNTRY == (record2.SHIP_TO_COUNTRY)) ||
                                 !(record1.REPAIR_TYPE == (record2.REPAIR_TYPE)) ||
                                 !(record1.REQUEST_TYPE == (record2.REQUEST_TYPE)))
-                            {
-                                //Call API
+                        {
+                            //execute getKeyMethodType
+                            logger.LogInformation("Calling getKeyMethodType to obtain suggestedKey and suggestedMethod");
 
-                                productInfo[] productInfos = new productInfo[]
+                            productInfo[] productInfos = new productInfo[]
+                            {
+                                new productInfo
                                 {
-                            new productInfo
-                            {
-                                RequestType = record1.REQUEST_TYPE ?? "N/A",
-                                APP_ID = record1.APP_ID ?? "N/A",
-                                SN = "dummy",
-                                PN = record1.PART_NO ?? "N/A",
-                                Customer = record1.CUSTOMER ?? "N/A",
-                                RepairType = record1.REPAIR_TYPE ?? "N/A",
-                                ShipToCountry = record1.SHIP_TO_COUNTRY ?? "N/A",
-                                ShipToSiteID = record1.SHIP_TO_SITE_ID ?? "N/A",
-                                Address = record1.ADDRESS ?? "N/A",
-                                Model = record1.MODEL_NO ?? "N/A",
+                                    RequestType = record1.REQUEST_TYPE ?? "N/A",
+                                    APP_ID = record1.APP_ID ?? "N/A",
+                                    SN = "dummy",
+                                    PN = record1.PART_NO ?? "N/A",
+                                    Customer = record1.CUSTOMER ?? "N/A",
+                                    RepairType = record1.REPAIR_TYPE ?? "N/A",
+                                    ShipToCountry = record1.SHIP_TO_COUNTRY ?? "N/A",
+                                    ShipToSiteID = record1.SHIP_TO_SITE_ID ?? "N/A",
+                                    Address = record1.ADDRESS ?? "N/A",
+                                    Model = record1.MODEL_NO ?? "N/A"
+                                }
+                            };
+                            
+                            getKeyMethodType getKeyType = new getKeyMethodType();
+                            getKeyType.productInfo = productInfos;
+                            getKeyType.returnType = "key";
+                            
+                            getKeyMethodType getMethodType = new getKeyMethodType();
+                            getMethodType.productInfo = productInfos;
+                            getMethodType.returnType = "method";
+                                                        
+                            var httpContentKeyType = new StringContent(JsonConvert.SerializeObject(getKeyType), 
+                                                                       Encoding.UTF8, "application/json");
+                            var httpContentMethodType = new StringContent(JsonConvert.SerializeObject(getMethodType),
+                                                                          Encoding.UTF8, "application/json");
 
-                            }
-                                };
+                            
+                            string suggestedKey = vc.PostAsync("/verifone-common/criteria/getKeyMethodType", httpContentKeyType);
+                            string suggestedMethod = vc.PostAsync("/verifone-common/criteria/getKeyMethodType", httpContentMethodType);
+                            
+                            RESPONSE responseKey = JsonConvert.DeserializeObject<RESPONSE>(suggestedKey);
+                            RESPONSE responseMethod = JsonConvert.DeserializeObject<RESPONSE>(suggestedMethod);
 
-                                getKeyMethodType getKeyType = new getKeyMethodType();
-                                getKeyType.productInfo = productInfos;
-                                getKeyType.returnType = "key";
+                            //Insert data in SZO_VER_PRODUCT_COMBO
+                            logger.LogInformation("Inserting record in SZO_VER_PRODUCT_COMBO...");
+                            var rowsAffected = or.Insert_SZO_VER_PRODUCT_COMBO(record2, responseKey.data, responseMethod.data);
+                            logger.LogInformation($"{rowsAffected} row(s) inserted.");
 
-                                getKeyMethodType getMethodType = new getKeyMethodType();
-                                getMethodType.productInfo = productInfos;
-                                getMethodType.returnType = "method";
-
-                                string jsonKeyType = Newtonsoft.Json.JsonConvert.SerializeObject(getKeyType);
-                                string jsonMethodType = Newtonsoft.Json.JsonConvert.SerializeObject(getMethodType);
-
-                                var httpContentKeyType = new StringContent(jsonKeyType, Encoding.UTF8, "application/json");
-                                var httpContentMethodType = new StringContent(jsonMethodType, Encoding.UTF8, "application/json");
-
-
-                                string suggestedKey = vc.PostAsync("/verifone-common/criteria/getKeyMethodType", httpContentKeyType);
-                                string suggestedMethod = vc.PostAsync("/verifone-common/criteria/getKeyMethodType", httpContentMethodType);
-
-                                RESPONSE model1 = JsonConvert.DeserializeObject<RESPONSE>(suggestedKey);
-                                RESPONSE model2 = JsonConvert.DeserializeObject<RESPONSE>(suggestedMethod);
-
-                                var rowsAffected = or.Insert_SZO_VER_PRODUCT_COMBO(record2, model1.data, model1.data);
-                                Console.WriteLine($"{rowsAffected} row(s) inserted.");
-
-                                //send mail alerts
-                                string strHost = "smtp.corp.ivytech.net";//ConfigurationManager.AppSettings["MailHost"];
-                                string strFrom = "donotreply@ivytech.com"; //ConfigurationManager.AppSettings["MailFrom"];
-                                string strToAll = "shobhna.parasher2@ivytech.com";  //ConfigurationManager.AppSettings["MailToAll"];
-                                string strCcAll = ""; // ConfigurationManager.AppSettings["MailCcAll"];
-                                string strBccAll = "";  //ConfigurationManager.AppSettings["MailBccAll"];
-                                string strSubject = string.Format("{0} {1} {2}", DateTime.Now, " - ", "Cassandra Notification"); //ConfigurationManager.AppSettings["MailSubject"]);
-                                string strMessage = string.Format("{0} {1}", "Cassandra Notification - No of rows inserted :", rowsAffected);
-                                string mailResponse = se.SendEmailAlert(strHost, strFrom, strToAll, strCcAll, strBccAll, strSubject, strMessage, "");
-                                /*
-                                if (ex.Message == "Unable to connect to the remote server")
-                                    Program.Terminate(13);
-                                else
-                                    Program.Terminate(1099);*/
-
-                                se.SendEmailAlert(strHost, strFrom, strToAll, strCcAll, strBccAll, strSubject, strMessage, "");
-                            }
-                            }
+                            //Send mail alerts
+                            logger.LogInformation("Sending mail alert...");
+                            string strHost = "smtp.corp.ivytech.net";//ConfigurationManager.AppSettings["MailHost"];
+                            string strFrom = "donotreply@ivytech.com"; //ConfigurationManager.AppSettings["MailFrom"];
+                            string strToAll = "shobhna.parasher2@ivytech.com";  //ConfigurationManager.AppSettings["MailToAll"];
+                            string strCcAll = ""; // ConfigurationManager.AppSettings["MailCcAll"];
+                            string strBccAll = "";  //ConfigurationManager.AppSettings["MailBccAll"];
+                            string strSubject = string.Format("{0} {1} {2}", DateTime.Now, " - ", "Cassandra Notification"); //ConfigurationManager.AppSettings["MailSubject"]);
+                            string strMessage = string.Format("{0} {1}", "Cassandra Notification - No of rows inserted : ", rowsAffected);
+                            string mailResponse = se.SendEmailAlert(strHost, strFrom, strToAll, strCcAll, strBccAll, strSubject, strMessage, "");
+                            
+                            se.SendEmailAlert(strHost, strFrom, strToAll, strCcAll, strBccAll, strSubject, strMessage, "");
+                            logger.LogInformation("Mail successfully sent");
                         }
+                    }
                 }
                 
+                logger.LogInformation("-= Finished =-");
+
             }
 
             catch (Exception ex)
             {
                 Environment.ExitCode = (int)ExitCode.Error;
                 Console.WriteLine(ex.ToString());
-            }
-            Console.WriteLine("-= Finished =-");
+            }            
         }
-        public record RESPONSE(String status, String message, String exceptionMessage, String data);
+        public record RESPONSE(String status, String message, String exceptionMessage, String data, String error);
         struct getKeyMethodType
         {
             public productInfo[] productInfo;
@@ -226,7 +239,7 @@ namespace CassandraScheduledTask
         struct filterByCriteria
         {
             public productInfo[] productInfo;
-            public string criteria;
+            public criteriaTable[] criteriaTable;
         }
         struct productInfo
         {
@@ -240,6 +253,12 @@ namespace CassandraScheduledTask
             public string ShipToSiteID;
             public string Address;
             public string Model;
+        }
+        struct criteriaTable
+        {
+            public string Criteria;
+            public string CriteriaOperator;
+            public string CriteriaValue;            
         }
     }
 }

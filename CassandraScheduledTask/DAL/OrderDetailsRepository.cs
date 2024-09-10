@@ -72,7 +72,8 @@ namespace CassandraScheduledTask.DAL
                         LEFT OUTER JOIN SL.RO_FLEX_FIELD ROFF_REQ ON ROFF_REQ.RO_EXT_ID = 49963 /*Request Type*/ AND ROFF_REQ.REFERENCE_ORDER_ID =
                         RO.REFERENCE_ORDER_ID
                             WHERE IO.ORDER_STATUS_ID = 2 /*Released*/ AND IO.CLIENT_ID = 75867 /*VeriFone*/ AND IO.CONTRACT_ID = 12528 /*Repair Hungary*/ AND
-                            IO.LOCATION_ID = 1224 /*Szombathely*/ AND ROWNUM = 1";
+                            IO.LOCATION_ID = 1224 /*Szombathely*/ AND IO.CREATED_TIMESTAMP >= SYSDATE -1 AND RO.BUSINESS_TRX_TYPE_ID = 1 ORDER BY
+                            IO.CREATED_TIMESTAMP ASC";
 
             var Get_VeriFone_OpenedInboundOrders = connection.Query<OPENED_INBOUND_ORDERS>(query2);
             return Get_VeriFone_OpenedInboundOrders;
@@ -126,7 +127,7 @@ namespace CassandraScheduledTask.DAL
                 null,
                 false, null,
                 CommandType.StoredProcedure);*/
-                return vf_config;
+            return vf_config;
             
         }
     }

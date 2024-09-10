@@ -31,6 +31,7 @@ namespace CassandraScheduledTask.DAL
             {
                 conn.Close();
             }
+            Console.WriteLine("Closing the DB connection");
         }
     }
 }
