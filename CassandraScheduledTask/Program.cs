@@ -20,6 +20,7 @@ using Microsoft.CodeAnalysis;
 using System.Runtime.ConstrainedExecution;
 using CassandraScheduledTask.Services;
 using Microsoft.Extensions.Logging;
+using System.Configuration;
 namespace CassandraScheduledTask
 {
     public static class Program
@@ -115,22 +116,20 @@ namespace CassandraScheduledTask
                         var httpContentCriteria = new StringContent(JsonConvert.SerializeObject(filterByCriteria),
                                                                     Encoding.UTF8, "application/json");
 
-                        string Criteria = vc.PostAsync("verifone-common/criteria/filterByCriteria", httpContentCriteria);
+                        string Criteria = vc.PostAsync(configuration.GetSection("VerifoneRequestURI")["FilterByCriteria"] ?? "N/A", httpContentCriteria);
                         RESPONSE responseCriteria = JsonConvert.DeserializeObject<RESPONSE>(Criteria);
-                        if (responseCriteria.status == "false")
+                        if (responseCriteria.status.ToUpper() == "PASS")
                         {
                             //send mail alerts
                             logger.LogInformation("Sending mail alert...");
-                            string strHost = "smtp.corp.ivytech.net";//ConfigurationManager.AppSettings["MailHost"];
-                            string strFrom = "donotreply@ivytech.com"; //ConfigurationManager.AppSettings["MailFrom"];
-                            string strToAll = "shobhna.parasher2@ivytech.com";  //ConfigurationManager.AppSettings["MailToAll"];
-                            string strCcAll = ""; // ConfigurationManager.AppSettings["MailCcAll"];
-                            string strBccAll = "";  //ConfigurationManager.AppSettings["MailBccAll"];
-                            string strSubject = string.Format("{0} {1} {2}", DateTime.Now, " - ", "Cassandra Notification"); //ConfigurationManager.AppSettings["MailSubject"]);
+
+                            string strHost = configuration.GetSection("MailSettings")["MailHost"] ?? "N/A";
+                            string strFrom = configuration.GetSection("MailSettings")["MailFrom"] ?? "N/A";
+                            string strToAll = configuration.GetSection("MailSettings")["MailToAll"] ?? "N/A";
+                            string strSubject = string.Format("{0} {1} {2}", "Cassandra Notification", " - ", DateTime.Now);
                             string strMessage = string.Format("{0} {1}", "Cassandra Notification - IncludedValue Field : ", record.INCLUDEDVALUES);
-                            string mailResponse = se.SendEmailAlert(strHost, strFrom, strToAll, strCcAll, strBccAll, strSubject, strMessage, "");
+                            string mailResponse = se.SendEmailAlert(strHost, strFrom, strToAll, string.Empty, string.Empty, strSubject, strMessage, "");
                             
-                            se.SendEmailAlert(strHost, strFrom, strToAll, strCcAll, strBccAll, strSubject, strMessage, "");
                             logger.LogInformation("Mail successfully sent");
                         }
                     }
@@ -192,8 +191,8 @@ namespace CassandraScheduledTask
                                                                           Encoding.UTF8, "application/json");
 
                             
-                            string suggestedKey = vc.PostAsync("/verifone-common/criteria/getKeyMethodType", httpContentKeyType);
-                            string suggestedMethod = vc.PostAsync("/verifone-common/criteria/getKeyMethodType", httpContentMethodType);
+                            string suggestedKey = vc.PostAsync(configuration.GetSection("VerifoneRequestURI")["GetKeyMethodType"] ?? "N/A", httpContentKeyType);
+                            string suggestedMethod = vc.PostAsync(configuration.GetSection("VerifoneRequestURI")["GetKeyMethodType"] ?? "N/A", httpContentMethodType);
                             
                             RESPONSE responseKey = JsonConvert.DeserializeObject<RESPONSE>(suggestedKey);
                             RESPONSE responseMethod = JsonConvert.DeserializeObject<RESPONSE>(suggestedMethod);
@@ -205,16 +204,14 @@ namespace CassandraScheduledTask
 
                             //Send mail alerts
                             logger.LogInformation("Sending mail alert...");
-                            string strHost = "smtp.corp.ivytech.net";//ConfigurationManager.AppSettings["MailHost"];
-                            string strFrom = "donotreply@ivytech.com"; //ConfigurationManager.AppSettings["MailFrom"];
-                            string strToAll = "shobhna.parasher2@ivytech.com";  //ConfigurationManager.AppSettings["MailToAll"];
-                            string strCcAll = ""; // ConfigurationManager.AppSettings["MailCcAll"];
-                            string strBccAll = "";  //ConfigurationManager.AppSettings["MailBccAll"];
-                            string strSubject = string.Format("{0} {1} {2}", DateTime.Now, " - ", "Cassandra Notification"); //ConfigurationManager.AppSettings["MailSubject"]);
+
+                            string strHost = configuration.GetSection("MailSettings")["MailHost"] ?? "N/A";
+                            string strFrom = configuration.GetSection("MailSettings")["MailFrom"] ?? "N/A";
+                            string strToAll = configuration.GetSection("MailSettings")["MailToAll"] ?? "N/A";
+                            string strSubject = string.Format("{0} {1} {2}", "Cassandra Notification", " - ", DateTime.Now); 
                             string strMessage = string.Format("{0} {1}", "Cassandra Notification - No of rows inserted : ", rowsAffected);
-                            string mailResponse = se.SendEmailAlert(strHost, strFrom, strToAll, strCcAll, strBccAll, strSubject, strMessage, "");
+                            string mailResponse = se.SendEmailAlert(strHost, strFrom, strToAll, string.Empty, string.Empty, strSubject, strMessage, "");
                             
-                            se.SendEmailAlert(strHost, strFrom, strToAll, strCcAll, strBccAll, strSubject, strMessage, "");
                             logger.LogInformation("Mail successfully sent");
                         }
                     }

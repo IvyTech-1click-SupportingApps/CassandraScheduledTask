@@ -12,16 +12,17 @@ using static CassandraScheduledTask.Program;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http;
+using System.Configuration;
 
 namespace CassandraScheduledTask.Services
 {
     public class VerifoneCommonAPI
     {
-        public readonly IConfiguration Configuration;
+        public readonly IConfiguration _configuration;
 
         public VerifoneCommonAPI(IConfiguration configuration)
         {
-            Configuration = configuration;
+            _configuration = configuration;
         }
 
         public string PostAsync(string requestURI, HttpContent httpContent)
@@ -30,9 +31,7 @@ namespace CassandraScheduledTask.Services
             {
                 using (var client = new HttpClient())
                 {
-                    Uri uri2 = new Uri("https://apiqa.corp.ivytech.net");
-
-                    client.BaseAddress = new Uri(uri2.ToString());
+                    client.BaseAddress = new Uri(_configuration["VerifoneAPILink"] ?? "N/A");
                     client.DefaultRequestHeaders.Accept.Clear();
                     client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
                     
