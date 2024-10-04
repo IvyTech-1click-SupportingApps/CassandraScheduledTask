@@ -82,6 +82,14 @@ namespace CassandraScheduledTask
 
 
                 //Check Alerts
+
+                string strHost = configuration.GetSection("MailSettings")["MailHost"] ?? "N/A";
+                string strFrom = configuration.GetSection("MailSettings")["MailFrom"] ?? "N/A";
+                string strToAll = configuration.GetSection("MailSettings")["MailToAll"] ?? "N/A";
+                string strSubject = string.Format("{0} {1} {2}", "Cassandra Notification", " - ", DateTime.Now);
+                string strMessage = string.Empty;
+                string mailResponse = string.Empty;
+
                 var recordsConfigByTypeID = or.GET_CONFIG_BY_TYPE_ID(9, "ALL");
                                 
                 foreach (var order in DistinctOpenedInboundOrders)
@@ -122,40 +130,39 @@ namespace CassandraScheduledTask
                         {
                             //send mail alerts
                             logger.LogInformation("Sending mail alert...");
-
-                            string strHost = configuration.GetSection("MailSettings")["MailHost"] ?? "N/A";
-                            string strFrom = configuration.GetSection("MailSettings")["MailFrom"] ?? "N/A";
-                            string strToAll = configuration.GetSection("MailSettings")["MailToAll"] ?? "N/A";
-                            string strSubject = string.Format("{0} {1} {2}", "Cassandra Notification", " - ", DateTime.Now);
-                            string strMessage = string.Format("{0} {1}", "Cassandra Notification - IncludedValue Field : ", record.INCLUDEDVALUES);
-                            string mailResponse = se.SendEmailAlert(strHost, strFrom, strToAll, string.Empty, string.Empty, strSubject, strMessage, "");
-                            
+                            strMessage = string.Format("{0} {1}", "Cassandra Notification - IncludedValue Field : ", record.INCLUDEDVALUES);
+                            mailResponse = se.SendEmailAlert(strHost, strFrom, strToAll, string.Empty, string.Empty, strSubject, strMessage, "");                            
                             logger.LogInformation("Mail successfully sent");
                         }
                     }
                 }
 
                 //Getting selected records based on Repair Type
-                var SelectedOpenedInboundOrders = DistinctOpenedInboundOrders
+                
+                var rejectList = DistinctOpenedInboundOrders
                                                         .Where(i => i.REPAIR_TYPE.Contains("SPEC") ||
                                                                     i.REPAIR_TYPE.Contains("LOAD") ||
                                                                     i.REPAIR_TYPE.Contains("SOFT"))
                                                         .ToList();
+                var SelectedOpenedInboundOrders = DistinctOpenedInboundOrders.Except(rejectList).ToList();
 
                 //Compare records
-                foreach (var record1 in SelectedOpenedInboundOrders)
+                int Totalrows = 0;
+                foreach (var record in SelectedOpenedInboundOrders)
                 {
-                    foreach (var record2 in Get_AllCombination)
-                    {
-                        if (!(record1.APP_ID == (record2.APP_ID)) ||
-                                !(record1.SHIP_TO_SITE_ID == (record2.SHIP_TO_SITE_ID)) ||
-                                !(record1.PART_NO == (record2.PART_NO)) ||
-                                !(record1.MODEL_NO == (record2.MODEL_NO)) ||
-                                !(record1.ADDRESS == (record2.ADDRESS)) ||
-                                !(record1.CUSTOMER == (record2.CUSTOMER)) ||
-                                !(record1.SHIP_TO_COUNTRY == (record2.SHIP_TO_COUNTRY)) ||
-                                !(record1.REPAIR_TYPE == (record2.REPAIR_TYPE)) ||
-                                !(record1.REQUEST_TYPE == (record2.REQUEST_TYPE)))
+                    var recordAllComb = Get_AllCombination.Select(i => i).Where(i => (i.APP_ID == record.APP_ID &&
+                                                                               i.SHIP_TO_SITE_ID == record.SHIP_TO_SITE_ID &&
+                                                                               i.PART_NO == record.PART_NO &&
+                                                                               i.MODEL_NO == record.MODEL_NO &&
+                                                                               i.ADDRESS == record.ADDRESS &&
+                                                                               i.CUSTOMER == record.CUSTOMER &&
+                                                                               i.SHIP_TO_COUNTRY == record.SHIP_TO_COUNTRY &&
+                                                                               i.REPAIR_TYPE == record.REPAIR_TYPE &&
+                                                                               i.REQUEST_TYPE == record.REQUEST_TYPE)).ToList();
+
+                    //foreach (var record2 in Get_AllCombination)
+                    //{
+                        if (recordAllComb.Count == 0)
                         {
                             //execute getKeyMethodType
                             logger.LogInformation("Calling getKeyMethodType to obtain suggestedKey and suggestedMethod");
@@ -164,16 +171,16 @@ namespace CassandraScheduledTask
                             {
                                 new productInfo
                                 {
-                                    RequestType = record1.REQUEST_TYPE ?? "N/A",
-                                    APP_ID = record1.APP_ID ?? "N/A",
+                                    RequestType = record.REQUEST_TYPE ?? "N/A",
+                                    APP_ID = record.APP_ID ?? "N/A",
                                     SN = "dummy",
-                                    PN = record1.PART_NO ?? "N/A",
-                                    Customer = record1.CUSTOMER ?? "N/A",
-                                    RepairType = record1.REPAIR_TYPE ?? "N/A",
-                                    ShipToCountry = record1.SHIP_TO_COUNTRY ?? "N/A",
-                                    ShipToSiteID = record1.SHIP_TO_SITE_ID ?? "N/A",
-                                    Address = record1.ADDRESS ?? "N/A",
-                                    Model = record1.MODEL_NO ?? "N/A"
+                                    PN = record.PART_NO ?? "N/A",
+                                    Customer = record.CUSTOMER ?? "N/A",
+                                    RepairType = record.REPAIR_TYPE ?? "N/A",
+                                    ShipToCountry = record.SHIP_TO_COUNTRY ?? "N/A",
+                                    ShipToSiteID = record.SHIP_TO_SITE_ID ?? "N/A",
+                                    Address = record.ADDRESS ?? "N/A",
+                                    Model = record.MODEL_NO ?? "N/A"
                                 }
                             };
                             
@@ -197,26 +204,26 @@ namespace CassandraScheduledTask
                             RESPONSE responseKey = JsonConvert.DeserializeObject<RESPONSE>(suggestedKey);
                             RESPONSE responseMethod = JsonConvert.DeserializeObject<RESPONSE>(suggestedMethod);
 
-                            //Insert data in SZO_VER_PRODUCT_COMBO
+                            //Insert data in SZO_VER_PRODUCT_COMBO                            
                             logger.LogInformation("Inserting record in SZO_VER_PRODUCT_COMBO...");
-                            var rowsAffected = or.Insert_SZO_VER_PRODUCT_COMBO(record2, responseKey.data, responseMethod.data);
+                            var rowsAffected = or.Insert_SZO_VER_PRODUCT_COMBO(record, 
+                                                                               responseKey.data.Replace("KeyMethodName : ", string.Empty),
+                                                                               responseMethod.data.Replace("KeyMethodName : ", string.Empty));
                             logger.LogInformation($"{rowsAffected} row(s) inserted.");
 
-                            //Send mail alerts
-                            logger.LogInformation("Sending mail alert...");
-
-                            string strHost = configuration.GetSection("MailSettings")["MailHost"] ?? "N/A";
-                            string strFrom = configuration.GetSection("MailSettings")["MailFrom"] ?? "N/A";
-                            string strToAll = configuration.GetSection("MailSettings")["MailToAll"] ?? "N/A";
-                            string strSubject = string.Format("{0} {1} {2}", "Cassandra Notification", " - ", DateTime.Now); 
-                            string strMessage = string.Format("{0} {1}", "Cassandra Notification - No of rows inserted : ", rowsAffected);
-                            string mailResponse = se.SendEmailAlert(strHost, strFrom, strToAll, string.Empty, string.Empty, strSubject, strMessage, "");
-                            
-                            logger.LogInformation("Mail successfully sent");
+                            Totalrows = Totalrows + rowsAffected; 
                         }
-                    }
+                    //}
                 }
-                
+                if (Totalrows > 0)
+                {
+                    //Send mail alerts
+                    logger.LogInformation("Sending mail alert...");
+                    strMessage = string.Format("{0} {1}", "New combination will arrive : ", Totalrows);
+                    mailResponse = se.SendEmailAlert(strHost, strFrom, strToAll, string.Empty, string.Empty, strSubject, strMessage, "");
+                    logger.LogInformation("Mail successfully sent");
+                }
+
                 logger.LogInformation("-= Finished =-");
 
             }
