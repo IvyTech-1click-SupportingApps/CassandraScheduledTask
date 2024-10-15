@@ -89,17 +89,17 @@ namespace CassandraScheduledTask
                 string strSubject = string.Format("{0} {1} {2}", "Cassandra Notification", " - ", DateTime.Now);
                 string strMessage = string.Empty;
                 string mailResponse = string.Empty;
+                string FilterByCriteriaURI = configuration.GetSection("VerifoneRequestURI")["FilterByCriteria"] ?? "N/A";
+                string GetKeyMethodTypeURI = configuration.GetSection("VerifoneRequestURI")["GetKeyMethodType"] ?? "N/A";
 
                 var recordsConfigByTypeID = or.GET_CONFIG_BY_TYPE_ID(9, "ALL");
-                                
                 foreach (var order in DistinctOpenedInboundOrders)
-                {
-                    foreach (var record in recordsConfigByTypeID)
-                    {
+                {                    
+                    if (recordsConfigByTypeID != null)
+                    { 
                         //execute filterByCriteria
-                        logger.LogInformation("Calling filterByCriteria");
-                        List<criteriaTable> criteriaTables = JsonConvert.DeserializeObject<List<criteriaTable>>(record.CRITERIA);
-
+                        logger.LogInformation("Calling filterByCriteria");                        
+                        List<criteriaTable> criteriaTables = JsonConvert.DeserializeObject<List<criteriaTable>>(recordsConfigByTypeID.CRITERIA);
                         productInfo[] productInfo = new productInfo[]
                         {
                             new productInfo
@@ -121,29 +121,30 @@ namespace CassandraScheduledTask
                         filterByCriteria.productInfo = productInfo;
                         filterByCriteria.criteriaTable = criteriaTables.ToArray();
 
-                        var httpContentCriteria = new StringContent(JsonConvert.SerializeObject(filterByCriteria),
-                                                                    Encoding.UTF8, "application/json");
-
-                        string Criteria = vc.PostAsync(configuration.GetSection("VerifoneRequestURI")["FilterByCriteria"] ?? "N/A", httpContentCriteria);
+                        var httpContentCriteria = new StringContent(JsonConvert.SerializeObject(filterByCriteria), Encoding.UTF8, "application/json");
+                        string Criteria = vc.PostAsync(FilterByCriteriaURI, httpContentCriteria);
                         RESPONSE responseCriteria = JsonConvert.DeserializeObject<RESPONSE>(Criteria);
-                        if (responseCriteria.status.ToUpper() == "PASS")
+
+                        if (responseCriteria.status.ToUpper() == "TRUE")
                         {
-                            //send mail alerts
-                            logger.LogInformation("Sending mail alert...");
-                            strMessage = string.Format("{0} {1}", "Cassandra Notification - IncludedValue Field : ", record.INCLUDEDVALUES);
-                            mailResponse = se.SendEmailAlert(strHost, strFrom, strToAll, string.Empty, string.Empty, strSubject, strMessage, "");                            
-                            logger.LogInformation("Mail successfully sent");
+                            if (responseCriteria.message == "Trigger Executed Successfully")
+                            {
+                                //send mail alerts
+                                logger.LogInformation("Sending mail alert...");                                
+                                strMessage = string.Format(recordsConfigByTypeID.INCLUDEDVALUES.Replace("APP_ID", order.APP_ID ?? "N/A"));
+                                mailResponse = se.SendEmailAlert(strHost, strFrom, strToAll, string.Empty, string.Empty, strSubject, strMessage, "");
+                                logger.LogInformation("Mail successfully sent");
+                            }
                         }
                     }
                 }
 
                 //Getting selected records based on Repair Type
                 
-                var rejectList = DistinctOpenedInboundOrders
-                                                        .Where(i => i.REPAIR_TYPE.Contains("SPEC") ||
-                                                                    i.REPAIR_TYPE.Contains("LOAD") ||
-                                                                    i.REPAIR_TYPE.Contains("SOFT"))
-                                                        .ToList();
+                var rejectList = DistinctOpenedInboundOrders.Where(i => i.REPAIR_TYPE.Contains("SPEC") ||
+                                                                        i.REPAIR_TYPE.Contains("LOAD") ||
+                                                                        i.REPAIR_TYPE.Contains("SOFT")).ToList();
+
                 var SelectedOpenedInboundOrders = DistinctOpenedInboundOrders.Except(rejectList).ToList();
 
                 //Compare records
@@ -192,14 +193,11 @@ namespace CassandraScheduledTask
                             getMethodType.productInfo = productInfos;
                             getMethodType.returnType = "method";
                                                         
-                            var httpContentKeyType = new StringContent(JsonConvert.SerializeObject(getKeyType), 
-                                                                       Encoding.UTF8, "application/json");
-                            var httpContentMethodType = new StringContent(JsonConvert.SerializeObject(getMethodType),
-                                                                          Encoding.UTF8, "application/json");
-
+                            var httpContentKeyType = new StringContent(JsonConvert.SerializeObject(getKeyType), Encoding.UTF8, "application/json");
+                            var httpContentMethodType = new StringContent(JsonConvert.SerializeObject(getMethodType), Encoding.UTF8, "application/json");
                             
-                            string suggestedKey = vc.PostAsync(configuration.GetSection("VerifoneRequestURI")["GetKeyMethodType"] ?? "N/A", httpContentKeyType);
-                            string suggestedMethod = vc.PostAsync(configuration.GetSection("VerifoneRequestURI")["GetKeyMethodType"] ?? "N/A", httpContentMethodType);
+                            string suggestedKey = vc.PostAsync(GetKeyMethodTypeURI, httpContentKeyType);
+                            string suggestedMethod = vc.PostAsync(GetKeyMethodTypeURI, httpContentMethodType);
                             
                             RESPONSE responseKey = JsonConvert.DeserializeObject<RESPONSE>(suggestedKey);
                             RESPONSE responseMethod = JsonConvert.DeserializeObject<RESPONSE>(suggestedMethod);

@@ -20,8 +20,8 @@ namespace CassandraScheduledTask.DAL
     {
         IEnumerable<SZO_VER_PRODUCT_COMBO> Get_AllCombination(int locationId);
         IEnumerable<OPENED_INBOUND_ORDERS> Get_VeriFone_OpenedInboundOrders(int locationId);
-        int Insert_SZO_VER_PRODUCT_COMBO(dynamic record, string model1, string model2);
-        IEnumerable<VF_CONFIGURATION> GET_CONFIG_BY_TYPE_ID(int p_typeid, string p_workcenter);
+        Int32 Insert_SZO_VER_PRODUCT_COMBO(dynamic record, string model1, string model2);
+        VF_CONFIGURATION? GET_CONFIG_BY_TYPE_ID(int p_typeid, string p_workcenter);
 
     }
 
@@ -36,8 +36,7 @@ namespace CassandraScheduledTask.DAL
             using var connection = GetConnection();
             var query1 =
                     @$"SELECT * FROM CLIENT_EXT.SZO_VER_PRODUCT_COMBO VPC
-                    WHERE
-                    VPC.LOCATION_ID = 1224";
+                       WHERE VPC.LOCATION_ID = 1224";
 
             var Get_AllCombination = connection.Query<SZO_VER_PRODUCT_COMBO>(query1);
             return Get_AllCombination;
@@ -72,17 +71,16 @@ namespace CassandraScheduledTask.DAL
                         LEFT OUTER JOIN SL.RO_FLEX_FIELD ROFF_REQ ON ROFF_REQ.RO_EXT_ID = 49963 /*Request Type*/ AND ROFF_REQ.REFERENCE_ORDER_ID =
                         RO.REFERENCE_ORDER_ID
                             WHERE IO.ORDER_STATUS_ID = 2 /*Released*/ AND IO.CLIENT_ID = 75867 /*VeriFone*/ AND IO.CONTRACT_ID = 12528 /*Repair Hungary*/ AND
-                            IO.LOCATION_ID = 1224 /*Szombathely*/ AND IO.CREATED_TIMESTAMP >= SYSDATE -1 AND RO.BUSINESS_TRX_TYPE_ID = 1 ORDER BY
-                            IO.CREATED_TIMESTAMP ASC";
+                            IO.LOCATION_ID = 1224 /*Szombathely*/ AND IO.CREATED_TIMESTAMP >= SYSDATE -1 AND RO.BUSINESS_TRX_TYPE_ID = 1 
+                            ORDER BY IO.CREATED_TIMESTAMP ASC";
 
             var Get_VeriFone_OpenedInboundOrders = connection.Query<OPENED_INBOUND_ORDERS>(query2);
             return Get_VeriFone_OpenedInboundOrders;
         }
 
-        public int Insert_SZO_VER_PRODUCT_COMBO(dynamic record, string suggestedKey, string suggestedMethod)
+        public Int32 Insert_SZO_VER_PRODUCT_COMBO(dynamic record, string suggestedKey, string suggestedMethod)
         {
             using var connection = GetConnection();
-
             var insertQuery = @"INSERT INTO CLIENT_EXT.SZO_VER_PRODUCT_COMBO (LOCATION_ID, PART_NO, MODEL_NO, CUSTOMER, SHIP_TO_COUNTRY, REPAIR_TYPE, APP_ID, SHIP_TO_SITE_ID, ADDRESS, SUGGESTED_KEY, SUGGESTED_METHOD, ACTIVE)  VALUES (1224, @PART_NO, @MODEL_NO, @CUSTOMER, @SHIP_TO_COUNTRY, @REPAIR_TYPE, @APP_ID, @SHIP_TO_SITE_ID, @ADDRESS, @SUGGESTED_KEY, @SUGGESTED_METHOD, 1)";
 
             insertQuery = insertQuery.Replace("@PART_NO", "'" + record.PART_NO + "'")
@@ -99,36 +97,14 @@ namespace CassandraScheduledTask.DAL
             return rowsAffected;
         }
 
-        public IEnumerable<VF_CONFIGURATION> GET_CONFIG_BY_TYPE_ID(int p_typeid, string p_workcenter)
+        public VF_CONFIGURATION? GET_CONFIG_BY_TYPE_ID(int p_typeid, string p_workcenter)
         {
             using var connection = GetConnection();
-            string query3 = @"SELECT
-                                VFC.WORKCENTER ,
-                                VFC.CRITERIA ,
-                                VFC.EXCEPTIONVALUES ,
-                                VFC.INCLUDEDVALUES ,
-                                VFC.CONFIG_NAME
-                                FROM
-                                WEBUI.VF_CONFIGURATION VFC
-                                    WHERE
-                                        VFC.INACTIVE_IND = 0 AND
-                                        VFC.CONFIG_TYPE_ID = 9 AND
-                                    (VFC.WORKCENTER = 'ALL')";
+            string query3 = @"SELECT VFC.WORKCENTER , VFC.CRITERIA, VFC.EXCEPTIONVALUES, VFC.INCLUDEDVALUES,VFC.CONFIG_NAME
+                              FROM  WEBUI.VF_CONFIGURATION VFC
+                              WHERE VFC.INACTIVE_IND = 0 AND  VFC.CONFIG_TYPE_ID = 9 AND (VFC.WORKCENTER = 'ALL')";
             var vf_config = connection.Query<VF_CONFIGURATION>(query3);
-
-            /*const string sql = "WEBUI.VERIFONE_CONFIG.GET_CONFIG_BY_TYPE_ID";
-            var dynamicParameters = new OracleDynamicParameters();
-            dynamicParameters.Add(":P_TYPEID", p_typeid, OracleMappingType.Int16, ParameterDirection.Input);
-            dynamicParameters.Add(":P_WORKCENTER", p_workcenter, OracleMappingType.Varchar2, ParameterDirection.Input);
-            dynamicParameters.Add(":O_CURSOR", string.Empty, OracleMappingType.RefCursor, ParameterDirection.Output);
-
-                var vf_configuration = connection.Query<VF_CONFIGURATION>(sql,
-                dynamicParameters,
-                null,
-                false, null,
-                CommandType.StoredProcedure);*/
-            return vf_config;
-            
+            return vf_config.FirstOrDefault();            
         }
     }
     public record SZO_VER_PRODUCT_COMBO(Decimal VER_PC_ID, Int64 LOCATION_ID, String PART_NO, String MODEL_NO,
@@ -139,7 +115,6 @@ namespace CassandraScheduledTask.DAL
     public record OPENED_INBOUND_ORDERS(Int64 INBOUND_ORDER_ID, Int64 REFERENCE_ORDER_ID, String VF_PR_NUMBER, String VF_SERIAL_NUMBER,
     String CUSTOMER, String SHIP_TO_COUNTRY, String ADDRESS, String SHIP_TO_SITE_ID, String APP_ID, String REPAIR_TYPE, String INCOMING_TRACKING_NUMBER,
     String REQUEST_TYPE, String PART_NO, String MODEL_NO, DateTime CREATED_TIMESTAMP);
-
     public record VF_CONFIGURATION(String WORKCENTER, String CRITERIA, String EXCEPTIONVALUES, String INCLUDEDVALUES,
     String CONFIG_NAME);
 
