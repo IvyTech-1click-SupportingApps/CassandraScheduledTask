@@ -21,7 +21,7 @@ namespace CassandraScheduledTask.DAL
         IEnumerable<SZO_VER_PRODUCT_COMBO> Get_AllCombination(int locationId);
         IEnumerable<OPENED_INBOUND_ORDERS> Get_VeriFone_OpenedInboundOrders(int locationId);
         Int32 Insert_SZO_VER_PRODUCT_COMBO(dynamic record, string model1, string model2);
-        VF_CONFIGURATION? GET_CONFIG_BY_TYPE_ID(int p_typeid, string p_workcenter);
+        IEnumerable<VF_CONFIGURATION> GET_CONFIG_BY_TYPE_ID(int p_typeid, string p_workcenter);
 
     }
 
@@ -97,14 +97,14 @@ namespace CassandraScheduledTask.DAL
             return rowsAffected;
         }
 
-        public VF_CONFIGURATION? GET_CONFIG_BY_TYPE_ID(int p_typeid, string p_workcenter)
+        public IEnumerable<VF_CONFIGURATION> GET_CONFIG_BY_TYPE_ID(int p_typeid, string p_workcenter)
         {
             using var connection = GetConnection();
             string query3 = @"SELECT VFC.WORKCENTER , VFC.CRITERIA, VFC.EXCEPTIONVALUES, VFC.INCLUDEDVALUES,VFC.CONFIG_NAME
                               FROM  WEBUI.VF_CONFIGURATION VFC
                               WHERE VFC.INACTIVE_IND = 0 AND  VFC.CONFIG_TYPE_ID = 9 AND (VFC.WORKCENTER = 'ALL')";
             var vf_config = connection.Query<VF_CONFIGURATION>(query3);
-            return vf_config.FirstOrDefault();            
+            return vf_config;            
         }
     }
     public record SZO_VER_PRODUCT_COMBO(Decimal VER_PC_ID, Int64 LOCATION_ID, String PART_NO, String MODEL_NO,

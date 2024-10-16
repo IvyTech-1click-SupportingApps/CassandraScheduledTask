@@ -96,12 +96,14 @@ namespace CassandraScheduledTask
                 foreach (var order in DistinctOpenedInboundOrders)
                 {                    
                     if (recordsConfigByTypeID != null)
-                    { 
-                        //execute filterByCriteria
-                        logger.LogInformation("Calling filterByCriteria");                        
-                        List<criteriaTable> criteriaTables = JsonConvert.DeserializeObject<List<criteriaTable>>(recordsConfigByTypeID.CRITERIA);
-                        productInfo[] productInfo = new productInfo[]
+                    {
+                        foreach (var record in recordsConfigByTypeID)
                         {
+                            //execute filterByCriteria
+                            logger.LogInformation("Calling filterByCriteria");
+                            List<criteriaTable> criteriaTables = JsonConvert.DeserializeObject<List<criteriaTable>>(record.CRITERIA);
+                            productInfo[] productInfo = new productInfo[]
+                            {
                             new productInfo
                             {
                                 RequestType = order.REQUEST_TYPE ?? "N/A",
@@ -116,24 +118,25 @@ namespace CassandraScheduledTask
                                 Model = order.MODEL_NO ?? "N/A",
 
                             }
-                        };
-                        filterByCriteria filterByCriteria = new filterByCriteria();
-                        filterByCriteria.productInfo = productInfo;
-                        filterByCriteria.criteriaTable = criteriaTables.ToArray();
+                            };
+                            filterByCriteria filterByCriteria = new filterByCriteria();
+                            filterByCriteria.productInfo = productInfo;
+                            filterByCriteria.criteriaTable = criteriaTables.ToArray();
 
-                        var httpContentCriteria = new StringContent(JsonConvert.SerializeObject(filterByCriteria), Encoding.UTF8, "application/json");
-                        string Criteria = vc.PostAsync(FilterByCriteriaURI, httpContentCriteria);
-                        RESPONSE responseCriteria = JsonConvert.DeserializeObject<RESPONSE>(Criteria);
+                            var httpContentCriteria = new StringContent(JsonConvert.SerializeObject(filterByCriteria), Encoding.UTF8, "application/json");
+                            string Criteria = vc.PostAsync(FilterByCriteriaURI, httpContentCriteria);
+                            RESPONSE responseCriteria = JsonConvert.DeserializeObject<RESPONSE>(Criteria);
 
-                        if (responseCriteria.status.ToUpper() == "TRUE")
-                        {
-                            if (responseCriteria.message == "Trigger Executed Successfully")
+                            if (responseCriteria.status.ToUpper() == "TRUE")
                             {
-                                //send mail alerts
-                                logger.LogInformation("Sending mail alert...");                                
-                                strMessage = string.Format(recordsConfigByTypeID.INCLUDEDVALUES.Replace("APP_ID", order.APP_ID ?? "N/A"));
-                                mailResponse = se.SendEmailAlert(strHost, strFrom, strToAll, string.Empty, string.Empty, strSubject, strMessage, "");
-                                logger.LogInformation("Mail successfully sent");
+                                if (responseCriteria.message == "Trigger Executed Successfully")
+                                {
+                                    //send mail alerts
+                                    logger.LogInformation("Sending mail alert...");
+                                    strMessage = string.Format(record.INCLUDEDVALUES);
+                                    mailResponse = se.SendEmailAlert(strHost, strFrom, strToAll, string.Empty, string.Empty, strSubject, strMessage, "");
+                                    logger.LogInformation("Mail successfully sent");
+                                }
                             }
                         }
                     }
