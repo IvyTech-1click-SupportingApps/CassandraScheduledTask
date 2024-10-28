@@ -81,13 +81,14 @@ namespace CassandraScheduledTask.DAL
         public Int32 Insert_SZO_VER_PRODUCT_COMBO(dynamic record, string suggestedKey, string suggestedMethod)
         {
             using var connection = GetConnection();
-            var insertQuery = @"INSERT INTO CLIENT_EXT.SZO_VER_PRODUCT_COMBO (LOCATION_ID, PART_NO, MODEL_NO, CUSTOMER, SHIP_TO_COUNTRY, REPAIR_TYPE, APP_ID, SHIP_TO_SITE_ID, ADDRESS, SUGGESTED_KEY, SUGGESTED_METHOD, ACTIVE)  VALUES (1224, @PART_NO, @MODEL_NO, @CUSTOMER, @SHIP_TO_COUNTRY, @REPAIR_TYPE, @APP_ID, @SHIP_TO_SITE_ID, @ADDRESS, @SUGGESTED_KEY, @SUGGESTED_METHOD, 1)";
+            var insertQuery = @"INSERT INTO CLIENT_EXT.SZO_VER_PRODUCT_COMBO (LOCATION_ID, PART_NO, MODEL_NO, CUSTOMER, SHIP_TO_COUNTRY, REPAIR_TYPE, REQUEST_TYPE, APP_ID, SHIP_TO_SITE_ID, ADDRESS, SUGGESTED_KEY, SUGGESTED_METHOD, ACTIVE)  VALUES (1224, @PART_NO, @MODEL_NO, @CUSTOMER, @SHIP_TO_COUNTRY, @REPAIR_TYPE, @REQUEST_TYPE, @APP_ID, @SHIP_TO_SITE_ID, @ADDRESS, @SUGGESTED_KEY, @SUGGESTED_METHOD, 1)";
 
             insertQuery = insertQuery.Replace("@PART_NO", "'" + record.PART_NO + "'")
                                      .Replace("@MODEL_NO", "'" + record.MODEL_NO + "'")
                                      .Replace("@CUSTOMER", "'" + record.CUSTOMER + "'")
                                      .Replace("@SHIP_TO_COUNTRY", "'" + record.SHIP_TO_COUNTRY + "'")
                                      .Replace("@REPAIR_TYPE", "'" + record.REPAIR_TYPE + "'")
+                                     .Replace("@REQUEST_TYPE", "'" + record.REQUEST_TYPE + "'")
                                      .Replace("@APP_ID", "'" + record.APP_ID + "'")
                                      .Replace("@SHIP_TO_SITE_ID", "'" + record.SHIP_TO_SITE_ID + "'")
                                      .Replace("@ADDRESS", "'" + record.ADDRESS + "'")
