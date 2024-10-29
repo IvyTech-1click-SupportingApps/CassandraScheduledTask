@@ -85,15 +85,15 @@ namespace CassandraScheduledTask.DAL
 
             insertQuery = insertQuery.Replace("@PART_NO", "'" + record.PART_NO + "'")
                                      .Replace("@MODEL_NO", "'" + record.MODEL_NO + "'")
-                                     .Replace("@CUSTOMER", "'" + record.CUSTOMER + "'")
+                                     .Replace("@CUSTOMER", "'" + record.CUSTOMER.Replace("'", "''") + "'")
                                      .Replace("@SHIP_TO_COUNTRY", "'" + record.SHIP_TO_COUNTRY + "'")
                                      .Replace("@REPAIR_TYPE", "'" + record.REPAIR_TYPE + "'")
                                      .Replace("@REQUEST_TYPE", "'" + record.REQUEST_TYPE + "'")
                                      .Replace("@APP_ID", "'" + record.APP_ID + "'")
                                      .Replace("@SHIP_TO_SITE_ID", "'" + record.SHIP_TO_SITE_ID + "'")
-                                     .Replace("@ADDRESS", "'" + record.ADDRESS + "'")
+                                     .Replace("@ADDRESS", "'" + record.ADDRESS.Replace("'", "''") + "'")
                                      .Replace("@SUGGESTED_KEY", "'" + suggestedKey + "'")
-                                     .Replace("@SUGGESTED_METHOD", "'" + suggestedMethod + "'");
+                                     .Replace("@SUGGESTED_METHOD", "'" + suggestedMethod + "'");            
             var rowsAffected = connection.Execute(insertQuery);
             return rowsAffected;
         }
