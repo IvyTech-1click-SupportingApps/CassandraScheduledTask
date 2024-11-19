@@ -1,6 +1,7 @@
 ﻿using System.Data;
 using Microsoft.Extensions.Configuration;
 using Oracle.ManagedDataAccess.Client;
+using Serilog;
 
 namespace CassandraScheduledTask.DAL
 {
@@ -21,7 +22,7 @@ namespace CassandraScheduledTask.DAL
             {
                 conn.Open();
             }
-            Console.WriteLine("Connected to DB");
+            Log.Information("Connected to DB");
             return conn;
         }
 
@@ -31,7 +32,7 @@ namespace CassandraScheduledTask.DAL
             {
                 conn.Close();
             }
-            Console.WriteLine("Closing the DB connection");
+            Log.Information("Closing the DB connection");
         }
     }
 }

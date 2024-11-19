@@ -21,6 +21,9 @@ using System.Runtime.ConstrainedExecution;
 using CassandraScheduledTask.Services;
 using Microsoft.Extensions.Logging;
 using System.Configuration;
+using Serilog;
+using Microsoft.Extensions.Hosting;
+using Serilog.Core;
 namespace CassandraScheduledTask
 {
     public static class Program
@@ -39,14 +42,14 @@ namespace CassandraScheduledTask
         {            
             try
             {
-                using var loggerFactory = LoggerFactory.Create(builder =>
-                {
-                    builder.AddConsole();
-                });
-                ILogger logger = loggerFactory.CreateLogger("Program");
-                logger.LogInformation("-= Start running scheduled job(s)... =-");
+                // Configure Serilog for file logging
+                Log.Logger = new LoggerConfiguration()
+                    .WriteTo.File("Logs/log.txt", rollingInterval: RollingInterval.Day)
+                    .CreateLogger();
+           
+                Log.Information("-= Start running scheduled job(s)... =-");
 
-                string path = Environment.CurrentDirectory;
+                string path = Directory.GetCurrentDirectory();//Environment.CurrentDirectory;
                 path = path.Replace("bin\\Debug\\net8.0", string.Empty);
 
                 IConfigurationBuilder configurationBuilder = new ConfigurationBuilder().SetBasePath(path);
@@ -57,13 +60,13 @@ namespace CassandraScheduledTask
                 VerifoneCommonAPI vc = new VerifoneCommonAPI(configuration);
                 SendEmail se = new SendEmail();
 
-                logger.LogInformation("Getting data from Get_AllCombination...");
+                Log.Information("Getting data from Get_AllCombination...");
                 var Get_AllCombination = or.Get_AllCombination(1224);
-                logger.LogInformation("Total no. of records in Get_AllCombination - " + Get_AllCombination.Count());
+                Log.Information("Total no. of records in Get_AllCombination - " + Get_AllCombination.Count());
 
-                logger.LogInformation("Getting data from Get_VeriFone_OpenedInboundOrders...");
+                Log.Information("Getting data from Get_VeriFone_OpenedInboundOrders...");
                 var Get_VeriFone_OpenedInboundOrders = or.Get_VeriFone_OpenedInboundOrders(1224);
-                logger.LogInformation("Total no. of records in Get_VeriFone_OpenedInboundOrders - " + Get_VeriFone_OpenedInboundOrders.Count());
+                Log.Information("Total no. of records in Get_VeriFone_OpenedInboundOrders - " + Get_VeriFone_OpenedInboundOrders.Count());
                 
                 //Getting distinct records
                 var DistinctOpenedInboundOrders =
@@ -100,7 +103,7 @@ namespace CassandraScheduledTask
                         foreach (var record in recordsConfigByTypeID)
                         {
                             //execute filterByCriteria
-                            logger.LogInformation("Calling filterByCriteria");
+                            Log.Information("Calling filterByCriteria");
                             List<criteriaTable> criteriaTables = JsonConvert.DeserializeObject<List<criteriaTable>>(record.CRITERIA);
                             productInfo[] productInfo = new productInfo[]
                             {
@@ -132,10 +135,10 @@ namespace CassandraScheduledTask
                                 if (responseCriteria.message == "Trigger Executed Successfully")
                                 {
                                     //send mail alerts
-                                    logger.LogInformation("Sending mail alert...");
+                                    Log.Information("Sending mail alert...");
                                     strMessage = string.Format(record.INCLUDEDVALUES);
                                     mailResponse = se.SendEmailAlert(strHost, strFrom, strToAll, string.Empty, string.Empty, strSubject, strMessage, "");
-                                    logger.LogInformation("Mail successfully sent");
+                                    Log.Information("Mail successfully sent");
                                 }
                             }
                         }
@@ -169,7 +172,7 @@ namespace CassandraScheduledTask
                         if (recordAllComb.Count == 0)
                         {
                             //execute getKeyMethodType
-                            logger.LogInformation("Calling getKeyMethodType to obtain suggestedKey and suggestedMethod");
+                            Log.Information("Calling getKeyMethodType to obtain suggestedKey and suggestedMethod");
 
                             productInfo[] productInfos = new productInfo[]
                             {
@@ -206,11 +209,11 @@ namespace CassandraScheduledTask
                             RESPONSE responseMethod = JsonConvert.DeserializeObject<RESPONSE>(suggestedMethod);
 
                             //Insert data in SZO_VER_PRODUCT_COMBO                            
-                            logger.LogInformation("Inserting record in SZO_VER_PRODUCT_COMBO...");
+                            Log.Information("Inserting record in SZO_VER_PRODUCT_COMBO...");
                             var rowsAffected = or.Insert_SZO_VER_PRODUCT_COMBO(record, 
                                                                                responseKey.data.Replace("KeyMethodName : ", string.Empty),
                                                                                responseMethod.data.Replace("KeyMethodName : ", string.Empty));
-                            logger.LogInformation($"{rowsAffected} row(s) inserted.");
+                            Log.Information($"{rowsAffected} row(s) inserted.");
 
                             Totalrows = Totalrows + rowsAffected; 
                         }
@@ -219,13 +222,13 @@ namespace CassandraScheduledTask
                 if (Totalrows > 0)
                 {
                     //Send mail alerts
-                    logger.LogInformation("Sending mail alert...");
+                    Log.Information("Sending mail alert...");
                     strMessage = string.Format("{0} {1}", "New combination will arrive : ", Totalrows);
                     mailResponse = se.SendEmailAlert(strHost, strFrom, strToAll, string.Empty, string.Empty, strSubject, strMessage, "");
-                    logger.LogInformation("Mail successfully sent");
+                    Log.Information("Mail successfully sent");
                 }
 
-                logger.LogInformation("-= Finished =-");
+                Log.Information("-= Finished =-");
 
             }
 
